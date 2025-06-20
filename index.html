@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digitalizador Web</title>
+    <script>
+    window.onload = function(){
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const originalCanvas = document.getElementById('originalCanvas');
+        const digitalCanvas = document.getElementById('digitalCanvas');
+        const ctxOriginal = originalCanvas.getContext('2d');
+        const ctxDigital = digitalCanvas.getContext('2d');
+
+        let originalImageData = null;
+        let loadedImage = null;
+
+        const fileInput = document.getElementById('imageInput');
+        fileInput.addEventListener('change', function() {
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                loadedImage = new Image();
+                loadedImage.onload = function() {
+                    const resolution = parseInt(document.getElementById('resolution').value);
+
+                    // Ajustar los canvas
+                    canvas.width = resolution;
+                    canvas.height = resolution;
+                    originalCanvas.width = resolution;
+                    originalCanvas.height = resolution;
+                    digitalCanvas.width = resolution;
+                    digitalCanvas.height = resolution;
+
+                    // Mostrar imagen cargada inmediatamente
+                    ctx.drawImage(loadedImage, 0, 0, resolution, resolution);
+                    ctxOriginal.drawImage(loadedImage, 0, 0, resolution, resolution);
+                };
+                loadedImage.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        window.processImage = function() {
+            if (!loadedImage) return;
+
+            const resolution = parseInt(document.getElementById('resolution').value);
+            const bitDepth = parseInt(document.getElementById('bitDepth').value);
+
+            ctx.drawImage(loadedImage, 0, 0, resolution, resolution);
+            let imageData = ctx.getImageData(0, 0, resolution, resolution);
+            originalImageData = new ImageData(new Uint8ClampedArray(imageData.data), resolution, resolution);
+            const data = imageData.data;
+
+           if (bitDepth >= 1 && bitDepth <= 10) {
+        const levels = Math.pow(2, bitDepth);
+        const scale = 255 / (levels - 1);
+
+        for (let i = 0; i < data.length; i += 4) {
+            // Redondear cada canal RGB (no alfa)
+            data[i]     = Math.round(data[i] / scale) * scale;     // Rojo
+            data[i + 1] = Math.round(data[i + 1] / scale) * scale; // Verde
+            data[i + 2] = Math.round(data[i + 2] / scale) * scale; // Azul
+        }
+    }
+
+            ctx.putImageData(imageData, 0, 0);
+            ctxDigital.putImageData(imageData, 0, 0);
+
+            // Obtener tamaño aproximado de imagen digitalizada (bytes)
+           const compressedDataURL = canvas.toDataURL('image/jpeg', 0.5);
+           const sizeBytes = Math.round((compressedDataURL.length * (3/4))); // base64 a bytes
+
+// Enviar estadísticas al backend
+         fetch('http://localhost:3000/api/stats', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+         resolution: `${resolution}x${resolution}`,
+         bitDepth: bitDepth,
+         imageSizeBytes: sizeBytes
+    })
+        }).then(res => res.json())
+        .then(data => console.log('Estadísticas enviadas:', data))
+        .catch(err => console.error('Error enviando estadísticas:', err));
+
+        };
+
+        window.comprimirImagen = function() {
+            const dataURL = canvas.toDataURL('image/jpeg', 0.5);
+            const link = document.createElement('a');
+            link.href = dataURL;
+            link.download = 'imagen_comprimida.jpg';
+            link.click();
+        };
+    }
+
+    </script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #133c55;
+            font-weight: bold;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            margin-bottom:10px;
+            background-color: rgb(220, 180, 2);
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+        }
+
+        header {
+            text-align: center;
+            font-size: 20px;
+            margin-bottom: 20px;
+            height:80px
+        }
+
+        header h1{
+            margin:50px
+        }
+
+        #seccion1{
+            background-color: rgb(220, 180, 2);
+        }
+
+        .upload-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: rgb(239, 239, 144);
+            padding:30px
+        }
+
+        .custom-file-upload {
+            background-color: green;
+            color: white;
+            text-align: center;
+            font-weight: bold;
+            padding: 10px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            margin-bottom: 15px;
+            display: inline-block;
+            width:500px;
+        }
+
+        .custom-file-upload:hover, .compress-btn:hover, button:hover {
+            background-color: rgb(8, 78, 8);
+        }
+
+        .custom-file-upload input[type="file"] {
+            display: none;
+        }
+
+        canvas {
+            background-color: grey;
+            border: solid black 1px;
+            margin-top: 5px;
+            max-width: 100%;
+        }
+
+        .parametero{
+            margin-top: 10px;
+            padding:30px;
+            background-color: rgb(220, 180, 2);
+            border-radius: 15px;
+            text-align: center;
+        }
+
+        .comparacion{
+             background-color: rgb(239, 239, 144);
+             text-align: center;
+        }
+
+        .parametero h3, .comparacion h3 {
+            background-color: rgb(255, 98, 0);
+            padding: 10px;
+            border-radius: 50px;
+            display:inline-block;
+            margin-bottom:20px
+        }
+
+        label, select {
+            display: block;
+            margin: 10px auto;
+            width: 80%;
+            padding: 8px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            background-color: #caf0f8;
+        }
+
+        button {
+            background-color: green;
+            color:white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 10px;
+            cursor: pointer;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+
+        .images-compare {
+            display:flex;
+            justify-content: space-between;
+            margin-top: 10px;
+        }
+
+        .compare-canvas {
+            background-color: grey;
+            width: 380px;
+            height: 380px;
+        }
+
+        .compress-btn {
+            display: inline;
+            width:500px;
+            margin-top: 30px;
+            background-color: green;
+            font-weight: bold;
+            margin-bottom:20px
+        }
+
+
+        .comparacion p{
+            background-color: rgb(75, 124, 222);
+            display:inline-block;
+            padding:5px;
+            margin-bottom:5px;
+            color:rgba(255, 255, 255, 0.767)
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Scanify</h1>
+        </header>
+        <div class="upload-section">
+            <label class="custom-file-upload">
+                <input type="file" id="imageInput" accept="image/*">
+                Cargar imagen
+            </label>
+            <canvas id="canvas"></canvas>
+        </div>
+
+        <div class="parametero">
+            <h3>Parametros de digitalizacion</h3>
+            <label for="resolution">Resolución de muestreo</label>
+            <select id="resolution">
+                <option value="100">100x100</option>
+                <option value="500">500x500</option>
+                <option value="1000">1000x1000</option>
+            </select>
+
+            <label for="bitDepth">Profundidad de bits</label>
+            <select id="bitDepth">
+                <option value="1">1 bit</option>
+                <option value="2">2 bit</option>
+                <option value="3">3 bit</option>
+                <option value="4">4 bit</option>
+                <option value="5">5 bit</option>
+                <option value="6">6 bit</option>
+                <option value="7">7 bit</option>
+                <option value="8">8 bits</option>
+                <option value="9">9 bit</option>
+                <option value="10">10 bit</option>
+                <option value="24" selected>24 bits</option>
+            </select>
+
+            <button onclick="processImage()">Convertir imagen</button>
+        </div>
+
+        <div class="comparacion">
+            <h3>Comparacion</h3>
+            <div class="images-compare">
+                <div>
+                    <p>Imagen original</p>
+                    <canvas id="originalCanvas" class="compare-canvas"></canvas>
+                </div>
+                <div>
+                    <p>Imagen digitalizada</p>
+                    <canvas id="digitalCanvas" class="compare-canvas"></canvas>
+                </div>
+            </div>
+             <button class="compress-btn" onclick="comprimirImagen()">Comprimir</button>
+        </div>
+
+    </div>
+</body>
+</html>
